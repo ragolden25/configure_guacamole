@@ -1,0 +1,49 @@
+FROM debian:${DEBIAN_VERSION}-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Base tools for repo + TLS
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gnupg && \
+    rm -rf /var/lib/apt/lists/*
+
+# nginx signing key
+RUN curl -fsSL https://nginx.org/keys/nginx_signing.key \
+    | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
+
+# nginx mainline repo (Debian 13 / trixie)
+RUN echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] \
+    https://nginx.org/packages/mainline/debian trixie nginx" \
+    > /etc/apt/sources.list.d/nginx.list
+
+# Install nginx + minimal runtime deps
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        nginx \
+        coreutils \
+        sed \
+        base-files && \
+    rm -rf /var/lib/apt/lists/*
+
+# Ensure runtime dirs exist
+RUN mkdir -p /var/cache/nginx /run /var/log/nginx
+
+# Log to stdout/stderr
+RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
+    ln -sf /dev/stderr /var/log/nginx/error.log
+
+# TLS + DH params will be mounted into /etc/nginx/certs and /etc/nginx
+#   /etc/nginx/certs/fullchain.pem
+#   /etc/nginx/certs/privkey.pem
+#   /etc/nginx/ssl-dhparams.pem
+
+EXPOSE 80 443
+
+# Functional: run as root, nginx.conf keeps `user nginx;`
+USER root
+
+ENTRYPOINT ["nginx"]
+CMD ["-g", "daemon off;"]
