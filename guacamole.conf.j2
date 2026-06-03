@@ -1,53 +1,51 @@
-# nginx.conf.j2 — unified config for functional + hardened images
+# guacamole.conf.j2 — unified config for functional + hardened nginx
 
-# Functional images (ccop/*) run master as root and drop to nginx user.
-# Hardened images (nucleus/*) run entirely as UID 65532, so we REMOVE the user directive.
-{% if nginx_image.startswith('ccop/') %}
-user nginx;
-{% endif %}
+server {
+    # Hardened and functional both terminate TLS here.
+    listen 443 ssl http2;
+    server_name {{ guac_hostname }};
 
-worker_processes auto;
-error_log /var/log/nginx/error.log;
-pid /run/nginx.pid;
+    # TLS certificate paths (mounted into /etc/nginx/certs)
+    ssl_certificate /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
 
-# Load dynamic modules
-include /usr/share/nginx/modules/*.conf;
+    # TLS settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256';
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1h;
+    ssl_session_tickets off;
 
-events {
-    worker_connections 1024;
+    # Security headers
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options DENY;
+    add_header X-XSS-Protection "1; mode=block";
+
+    # DH params (mounted into /etc/nginx)
+    ssl_dhparam /etc/nginx/ssl-dhparams.pem;
+
+    # Redirect root → /guacamole/
+    location / {
+        return 302 https://$host/guacamole/;
+    }
+
+    # Guacamole reverse proxy
+    location /guacamole/ {
+        proxy_pass http://guacamole:8080/guacamole/;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host $host;
+
+        # WebSocket support
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $http_connection;
+    }
 }
-
-http {
-    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
-                      '$status $body_bytes_sent "$http_referer" '
-                      '"$http_user_agent" "$http_x_forwarded_for"';
-
-    access_log  /var/log/nginx/access.log  main;
-
-    sendfile            on;
-    tcp_nopush          on;
-    tcp_nodelay         on;
-    keepalive_timeout   65;
-    types_hash_max_size 4096;
-
-    include             /etc/nginx/mime.types;
-    default_type        application/octet-stream;
-
-    # Load reverse-proxy configs (guacamole.conf)
-    include /etc/nginx/conf.d/*.conf;
-
-    # Functional images include the default HTML server block.
-    # Hardened images remove it entirely.
-    {% if nginx_image.startswith('ccop/') %}
-    server {
-        listen       80;
-        server_name  _;
-        root         /usr/share/nginx/html;
-
-        error_page 404 /404.html;
-        location = /404.html { }
-
-        error_page 500 502 503 504 /50x.html;
         location = /50x.html { }
     }
     {% endif %}
