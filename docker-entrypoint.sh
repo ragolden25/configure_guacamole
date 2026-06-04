@@ -1,17 +1,20 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-if [ "$1" = "postgres" ]; then
-    if [ ! -s "$PGDATA/PG_VERSION" ]; then
-        echo "Initializing database cluster at $PGDATA"
-        mkdir -p "$PGDATA"
-        chown -R postgres:postgres "$PGDATA"
-        chmod 700 "$PGDATA"
+if [ "${1:-}" = "postgres" ]; then
+  if [ ! -s "$PGDATA/PG_VERSION" ]; then
+    mkdir -p "$PGDATA"
+    chown -R postgres:postgres "$(dirname "$PGDATA")"
+    chmod 0700 "$PGDATA"
 
-        gosu postgres initdb -D "$PGDATA"
-    fi
+    gosu postgres initdb -D "$PGDATA"
 
-    exec gosu postgres postgres -D "$PGDATA"
+    # Optionally: drop in custom configs here later
+    # e.g. cp /etc/postgresql/postgresql.conf "$PGDATA"/
+    #      cp /etc/postgresql/pg_hba.conf "$PGDATA"/
+  fi
+
+  exec gosu postgres postgres -D "$PGDATA"
 fi
 
 exec "$@"
