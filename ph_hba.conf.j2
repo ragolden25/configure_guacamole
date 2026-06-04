@@ -1,0 +1,7 @@
+# Local connections
+local   all             all                                     scram-sha-256
+host    all             all             127.0.0.1/32            scram-sha-256
+host    all             all             ::1/128                 scram-sha-256
+
+# Remote connections
+host    all             all             0.0.0.0/0               {{ remote_auth | default("scram-sha-256") }}
