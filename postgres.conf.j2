@@ -1,0 +1,17 @@
+# PostgreSQL {{ pg_major }} Configuration
+
+shared_buffers = {{ shared_buffers | default("256MB") }}
+work_mem = {{ work_mem | default("4MB") }}
+maintenance_work_mem = {{ maintenance_work_mem | default("64MB") }}
+
+wal_level = {{ wal_level | default("replica") }}
+max_wal_size = {{ max_wal_size | default("1GB") }}
+min_wal_size = {{ min_wal_size | default("80MB") }}
+
+max_connections = {{ max_connections | default("100") }}
+
+log_timezone = 'UTC'
+log_statement = 'none'
+log_min_duration_statement = 500
+
+password_encryption = scram-sha-256
