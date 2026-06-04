@@ -1,0 +1,93 @@
+FROM debian:13-slim AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PG_MAJOR=18
+ENV PG_MINOR=4
+ENV PREFIX=/opt/postgresql/${PG_MAJOR}
+
+# Build dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        autoconf automake build-essential clang \
+        bison flex pkgconf \
+        libcurl4-openssl-dev libgss-dev libicu-dev libldap2-dev \
+        liblz4-dev libnuma-dev libpam0g-dev libreadline-dev \
+        libselinux1-dev libssl-dev liburing-dev libxml2-dev \
+        libxslt1-dev libzstd-dev uuid-dev zlib1g-dev \
+        lz4 tzdata ca-certificates curl patch && \
+    rm -rf /var/lib/apt/lists/*
+
+# Download PostgreSQL source
+WORKDIR /src
+RUN curl -fsSL https://ftp.postgresql.org/pub/source/v${PG_MAJOR}.${PG_MINOR}/postgresql-${PG_MAJOR}.${PG_MINOR}.tar.gz \
+    -o pg.tar.gz && \
+    tar -xzf pg.tar.gz
+
+# Apply patches
+COPY patches/*.patch /src/patches/
+RUN cd postgresql-${PG_MAJOR}.${PG_MINOR} && \
+    for p in /src/patches/*.patch; do patch -p1 < "$p"; done
+
+# Build PostgreSQL
+RUN cd postgresql-${PG_MAJOR}.${PG_MINOR} && \
+    ./configure \
+        --prefix="${PREFIX}" \
+        --with-gssapi \
+        --with-icu \
+        --with-ldap \
+        --with-libcurl \
+        --with-libnuma \
+        --with-liburing \
+        --with-libxml \
+        --with-libxslt \
+        --with-llvm \
+        --with-lz4 \
+        --with-pam \
+        --with-selinux \
+        --with-ssl=openssl \
+        --with-uuid=e2fs \
+        --with-zstd \
+        --with-system-tzdata=/usr/share/zoneinfo && \
+    make world-bin -j"$(nproc)" && \
+    make install-world-bin DESTDIR=/build
+
+# Runtime image
+FROM debian:13-slim
+
+ENV PG_MAJOR=18
+ENV PGDATA=/var/lib/postgresql/18/data
+ENV PATH=/opt/postgresql/18/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Add postgres user/group (UID/GID = 70)
+RUN groupadd -g 70 postgres && \
+    useradd -u 70 -g 70 -M -d /nonexistent -s /usr/sbin/nologin postgres
+
+# Install runtime dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libcurl4t64 libgssapi-krb5-2 libicu76 libldap2 liblz4-1 \
+        libnuma1 libpam0g libreadline8t64 libselinux1 libssl3t64 \
+        liburing2 libuuid1 libxml2 libxslt1.1 libzstd1 zlib1g \
+        tzdata ca-certificates locales && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install gosu
+ADD https://github.com/tianon/gosu/releases/download/1.19/gosu-amd64 /usr/local/sbin/gosu
+RUN chmod +x /usr/local/sbin/gosu
+
+# Copy built PostgreSQL
+COPY --from=builder /build/opt/postgresql/18 /opt/postgresql/18
+
+# Create PGDATA
+RUN mkdir -p ${PGDATA} && \
+    chown -R postgres:postgres /var/lib/postgresql && \
+    chmod 700 ${PGDATA}
+
+# Copy entrypoint
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 755 /usr/local/bin/docker-entrypoint.sh
+
+EXPOSE 5432
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["postgres"]
