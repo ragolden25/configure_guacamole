@@ -1,0 +1,64 @@
+FROM debian:13-slim
+
+ARG PG_MAJOR=18
+ARG PG_MINOR=4
+ARG PG_VERSION=${PG_MAJOR}.${PG_MINOR}
+ARG PG_PREFIX=/opt/postgresql/${PG_MAJOR}
+ARG PGDATA=/var/lib/postgresql/${PG_MAJOR}/data
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN set -eux; \
+    groupadd -g 70 postgres; \
+    useradd -u 70 -g 70 -d /var/lib/postgresql -s /usr/sbin/nologin postgres; \
+    mkdir -p "${PGDATA}"; \
+    chown -R postgres:postgres /var/lib/postgresql; \
+    chmod 0700 "${PGDATA}"
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      ca-certificates \
+      libcurl4t64 \
+      libgssapi-krb5-2 \
+      libicu76 \
+      libldap2 \
+      liblz4-1 \
+      libnuma1 \
+      libpam0g \
+      libreadline8t64 \
+      libselinux1 \
+      libssl3t64 \
+      liburing2 \
+      libuuid1 \
+      libxml2 \
+      libxslt1.1 \
+      libzstd1 \
+      locales \
+      tzdata \
+      gosu \
+    ; \
+    rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen; \
+    locale-gen en_US.UTF-8
+
+ENV LANG=en_US.UTF-8 \
+    LANGUAGE=en_US:en \
+    LC_ALL=en_US.UTF-8 \
+    PATH=${PG_PREFIX}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    PG_MAJOR=${PG_MAJOR} \
+    PG_MINOR=${PG_MINOR} \
+    PGDATA=${PGDATA}
+
+# Copy in the already-built PostgreSQL tree from your functional build artifact
+COPY opt/postgresql/${PG_MAJOR} ${PG_PREFIX}
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
+
+EXPOSE 5432
+USER postgres
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["postgres"]
