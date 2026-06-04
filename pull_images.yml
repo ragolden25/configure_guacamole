@@ -1,0 +1,45 @@
+build_guacd.yml
+---
+- name: Build guacd image
+  command: "{{ guacd_build }}/scripts/build_guacd.sh {{ guacd_version }} {{ quarter }}"
+  args:
+    chdir: "{{ guacd_build }}"
+[root@ansible tasks]# cat pull_images.yml
+---
+# pull_images.yml
+
+# Pull NGINX hardened image (weekly, retry)
+- name: Pull NGINX hardened image (weekly, retry)
+  command: "{{ guac_files }}/scripts/pull_nginx_image.sh {{ nginx_version }}"
+  register: nginx_pull
+  retries: 3
+  delay: 10
+  until: nginx_pull.rc == 0
+  delegate_to: localhost
+  run_once: true
+
+# Pull Postgres hardened image (weekly, retry)
+- name: Pull Postgres hardened image (weekly, retry)
+  command: "{{ guac_files }}/scripts/pull_postgres_image.py"
+  args:
+    chdir: "{{ guac_files }}/postgres"
+  register: postgres_pull
+  retries: 3
+  delay: 10
+  until: postgres_pull.rc == 0
+  delegate_to: localhost
+  run_once: true
+
+# Pull Guacamole functional image
+- name: Pull Guacamole functional image
+  command: "/opt/ansible/files/build/guacamole/scripts/pull_guacamole_functional.sh {{ guac_functional_digest }}"
+  when:
+    - guac_build_mode in ['functional', 'both']
+    - guac_functional_digest | length > 0
+
+# Pull Guacamole hardened image
+- name: Pull Guacamole hardened image
+  command: "/opt/ansible/files/build/guacamole/scripts/pull_guacamole_hardened.sh {{ guac_hardened_digest }}"
+  when:
+    - guac_build_mode in ['hardened', 'both']
+    - guac_hardened_digest | length > 0
