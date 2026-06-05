@@ -1,0 +1,75 @@
+---
+# create_directories.yml
+
+# 1. Ensure delivery quarter directory exists
+- name: Ensure delivery quarter directory exists
+  file:
+    path: "{{ guac_files }}/{{ quarter }}"
+    state: directory
+    owner: ansible
+    group: ansible-admin
+    mode: "2770"
+  delegate_to: localhost
+
+# 2. Ensure build quarter directories exist
+- name: Ensure build quarter directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: ansible
+    group: ansible-admin
+    mode: "2770"
+  loop:
+    - "{{ guacamole_build }}/{{ quarter }}"
+    - "{{ guacd_build }}/{{ quarter }}"
+  delegate_to: localhost
+
+# 3. Seed delivery directory from previous quarter (only if it exists)
+- name: Seed delivery directory from previous quarter
+  command: >
+    rsync -a --exclude='*.tar.gz'
+    {{ guac_files }}/{{ previous_quarter }}/
+    {{ guac_files }}/{{ quarter }}/
+  when:
+    - previous_quarter is defined
+    - quarter != previous_quarter
+    - (guac_files + '/' + previous_quarter) is directory
+  delegate_to: localhost
+
+# 4. Seed build directories from previous quarter (only if they exist)
+- name: Seed build directories from previous quarter
+  command: >
+    rsync -a --exclude='*.tar.gz'
+    {{ item }}/{{ previous_quarter }}/
+    {{ item }}/{{ quarter }}/
+  loop:
+    - "{{ guacamole_build }}"
+    - "{{ guacd_build }}"
+  when:
+    - previous_quarter is defined
+    - quarter != previous_quarter
+    - (item + '/' + previous_quarter) is directory
+  delegate_to: localhost
+
+# 5. Remove stale compose and version files (weekly builds must regenerate these)
+- name: Remove stale compose and version files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ guac_files }}/{{ quarter }}/docker-compose.yml"
+    - "{{ guac_files }}/{{ quarter }}/versions.env"
+  delegate_to: localhost
+
+# 6. Ensure component directories exist in delivery tree
+- name: Ensure component directories exist
+  file:
+    path: "{{ guac_files }}/{{ quarter }}/{{ item }}"
+    state: directory
+    owner: ansible
+    group: ansible-admin
+    mode: "2770"
+  loop:
+    - guacamole
+    - guacd
+  delegate_to: localhost
