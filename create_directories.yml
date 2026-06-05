@@ -1,4 +1,3 @@
----
 # create_directories.yml
 
 # 1. Ensure delivery quarter directory exists
@@ -21,7 +20,6 @@
     mode: "2770"
   loop:
     - "{{ guacamole_build }}/{{ quarter }}"
-    - "{{ guacd_build }}/{{ quarter }}"
     - "{{ nginx_build }}/{{ quarter }}"
     - "{{ postgres_build }}/{{ quarter }}"
   delegate_to: localhost
@@ -46,7 +44,6 @@
     {{ item }}/{{ quarter }}/
   loop:
     - "{{ guacamole_build }}"
-    - "{{ guacd_build }}"
     - "{{ nginx_build }}"
     - "{{ postgres_build }}"
   when:
@@ -55,7 +52,7 @@
     - (item + '/' + previous_quarter) is directory
   delegate_to: localhost
 
-# 5. Remove stale compose and version files (weekly builds must regenerate these)
+# 5. Remove stale compose and version files (quarterly builds must regenerate these)
 - name: Remove stale compose and version files
   file:
     path: "{{ item }}"
@@ -75,7 +72,7 @@
     mode: "2770"
   loop:
     - guacamole
-    - guacd
+    - images
     - nginx
     - postgres
   delegate_to: localhost
