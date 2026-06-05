@@ -16,7 +16,7 @@ services:
       POSTGRES_USER: {{ guac_db_user }}
       POSTGRES_PASSWORD: {{ guac_db_pass }}
     volumes:
-      - guac-db-data:/var/lib/postgresql
+      - guac-db-data:/var/lib/postgresql/data
     networks:
       - guacnet
 
@@ -31,14 +31,13 @@ services:
       - postgres
     environment:
       GUACD_HOSTNAME: guacd
-      POSTGRESQL_HOSTNAME: postgres
-      POSTGRESQL_DATABASE: {{ guac_db_name }}
-      POSTGRESQL_USERNAME: {{ guac_db_user }}
-      POSTGRESQL_PASSWORD: {{ guac_db_pass }}
+      POSTGRES_HOSTNAME: postgres
+      POSTGRES_DATABASE: {{ guac_db_name }}
+      POSTGRES_USER: {{ guac_db_user }}
+      POSTGRES_PASSWORD: {{ guac_db_pass }}
       REMOTE_IP_VALVE_ENABLED: 'true'
       REMOTE_IP_VALVE_REMOTE_IP_HEADER: X-Forwarded-For
       REMOTE_IP_VALVE_PROTOCOL_HEADER: X-Forwarded-Proto
-
     networks:
       - guacnet
 
