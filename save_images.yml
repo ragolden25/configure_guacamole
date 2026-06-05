@@ -15,9 +15,27 @@
     src: "{{ guacamole_build }}/{{ quarter }}/VERSION"
   register: guacamole_version_raw
 
+- name: 1.3 Read tomcat version
+  slurp:
+    src: "{{ tomcat_build }}/{{ quarter }}/VERSION"
+  register: tomcat_version_raw
+
+- name: 1.4 Read nginx version
+  slurp:
+    src: "{{ build_root }}/nginx/{{ quarter }}/VERSION"
+  register: nginx_version_raw
+
+- name: 1.5 Read postgres version
+  slurp:
+    src: "{{ build_root }}/postgres/{{ quarter }}/VERSION"
+  register: postgres_version_raw
+
 - set_fact:
     guacd_version: "{{ guacd_version_raw.content | b64decode | trim }}"
     guacamole_version: "{{ guacamole_version_raw.content | b64decode | trim }}"
+    tomcat_version: "{{ tomcat_version_raw.content | b64decode | trim }}"
+    nginx_version: "{{ nginx_version_raw.content | b64decode | trim }}"
+    postgres_version: "{{ postgres_version_raw.content | b64decode | trim }}"
 
 # =====================================================================
 # 2.0 Save Docker images to tar.gz (local)
@@ -52,6 +70,22 @@
     chdir: "{{ tomcat_build }}/{{ quarter }}"
 
 # =====================================================================
+# 2B. Save nginx + postgres images (using component scripts)
+# =====================================================================
+
+- name: Save nginx image
+  command:
+    cmd: >
+      {{ build_root }}/nginx/scripts/save_nginx_image.sh
+      {{ nginx_version }} {{ quarter }}
+
+- name: Save postgres image
+  command:
+    cmd: >
+      {{ build_root }}/postgres/scripts/save_postgres_image.sh
+      {{ postgres_version }} {{ quarter }}
+
+# =====================================================================
 # 3.0 Move artifacts into avocado tree (local copy)
 # =====================================================================
 
@@ -84,22 +118,21 @@
     dest: "{{ guac_files }}/{{ quarter }}/images/tomcat-nucleus-{{ tomcat_version }}.tar.gz"
     remote_src: yes
 
+- name: 3.6 Copy nginx artifact into avocado images
+  copy:
+    src: "{{ build_root }}/nginx/{{ quarter }}/nginx-{{ nginx_version }}.tar.gz"
+    dest: "{{ guac_files }}/{{ quarter }}/images/nginx-{{ nginx_version }}.tar.gz"
+    remote_src: yes
 
-# =====================================================================
-# 4.0 Save nginx and postgres (already local)
-# =====================================================================
-
-- name: 4.1 Save nginx image
-  command:
-    cmd: "/opt/ansible/files/avocado/scripts/save_nginx_image.sh {{ nginx_version }} {{ quarter }}"
-
-- name: 4.2 Save postgres image
-  command:
-    cmd: "/opt/ansible/files/avocado/scripts/save_postgres_image.sh {{ postgres_version }} {{ quarter }}"
+- name: 3.7 Copy postgres artifact into avocado images
+  copy:
+    src: "{{ build_root }}/postgres/{{ quarter }}/postgres-{{ postgres_version }}.tar.gz"
+    dest: "{{ guac_files }}/{{ quarter }}/images/postgres-{{ postgres_version }}.tar.gz"
+    remote_src: yes
 
 # =====================================================================
 # 5.0 Cleanup on ansible
 # =====================================================================
 
 - name: 5.1 Prune unused Docker data on ansible
-  command: docker system prune -f
+  command: docker system prune -af --volumes
