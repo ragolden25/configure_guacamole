@@ -39,7 +39,7 @@
 ###############################################
 
 - name: Detect latest nginx version
-  command: "/opt/ansible/files/avocado/scripts/detect_nginx_version.sh"
+  command: "{{ build_root }}/nginx/scripts/detect_nginx_version.sh"
   register: nginx_detect
   delegate_to: localhost
   run_once: true
@@ -50,17 +50,18 @@
   run_once: true
 
 ###############################################
-# POSTGRES VERSION PREDICTION
+# POSTGRES VERSION DETECTION
 ###############################################
 
 - name: Detect current postgres version
-  command: /opt/ansible/files/avocado/scripts/predict_postgres.py
+  command: "{{ build_root }}/postgres/scripts/predict_postgres.py"
   register: pg_detect
   delegate_to: localhost
   run_once: true
 
-- set_fact:
-    postgres_version: "{{ pg_detect.stdout }}"
+- name: Set postgres_version fact
+  set_fact:
+    postgres_version: "{{ pg_detect.stdout | trim }}"
   run_once: true
 
 ###############################################
@@ -93,5 +94,19 @@
   copy:
     dest: "{{ guacd_build }}/{{ quarter }}/VERSION"
     content: "{{ guacd_version }}"
+  delegate_to: localhost
+  run_once: true
+
+- name: Write nginx VERSION file
+  copy:
+    dest: "{{ build_root }}/nginx/{{ quarter }}/VERSION"
+    content: "{{ nginx_version }}"
+  delegate_to: localhost
+  run_once: true
+
+- name: Write postgres VERSION file
+  copy:
+    dest: "{{ build_root }}/postgres/{{ quarter }}/VERSION"
+    content: "{{ postgres_version }}"
   delegate_to: localhost
   run_once: true
