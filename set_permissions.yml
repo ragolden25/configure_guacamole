@@ -1,0 +1,29 @@
+---
+- name: Set directory permissions
+  file:
+    path: "{{ guac_files }}/{{ quarter }}"
+    state: directory
+    owner: ansible
+    group: ansible-admin
+    mode: "2770"
+    recurse: yes
+  delegate_to: localhost
+  become: true
+
+- name: Find files
+  find:
+    paths: "{{ guac_files }}/{{ quarter }}"
+    file_type: file
+  register: found_files
+  delegate_to: localhost
+  become: true
+
+- name: Apply file permissions
+  file:
+    path: "{{ item.path }}"
+    owner: ansible
+    group: ansible-admin
+    mode: "0660"
+  loop: "{{ found_files.files }}"
+  delegate_to: localhost
+  become: true
