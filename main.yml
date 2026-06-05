@@ -84,9 +84,10 @@
   when: is_new_quarter
 
 # ---------------------------------------------------------
-# 6. BUILD FUNCTIONAL + HARDENED TOMCAT + FUNCTIONAL GUACAMOLE
+# 6. BUILD FUNCTIONAL + HARDENED COMPONENTS
 # ---------------------------------------------------------
 
+# Tomcat + Guacamole
 - name: Build functional Tomcat
   include_tasks: build_tomcat_functional.yml
 
@@ -99,16 +100,29 @@
 - name: Build hardened Tomcat
   include_tasks: build_tomcat_hardened.yml
 
-# 6B. Build functional Guacd
+# Guacd
 - name: Build functional Guacd
   include_tasks: build_guacd.yml
 
+# NGINX
+- name: Build functional NGINX
+  script: "{{ build_root }}/nginx/{{ quarter }}/scripts/build_nginx_functional.sh"
+
+- name: Build hardened NGINX
+  script: "{{ build_root }}/nginx/{{ quarter }}/scripts/build_nginx_hardened.sh"
+
+# POSTGRES
+- name: Build functional Postgres
+  script: "{{ build_root }}/postgres/{{ quarter }}/scripts/build_postgres_functional.sh"
+
+- name: Build hardened Postgres
+  script: "{{ build_root }}/postgres/{{ quarter }}/scripts/build_postgres_hardened.sh"
+
 # ---------------------------------------------------------
-# 7. PULL IMAGES (Hybrid)
+# 7. REMOVE HYBRID PULL IMAGES (REPLACED BY BUILD + LOAD)
 # ---------------------------------------------------------
 
-- name: Pull images
-  include_tasks: pull_images.yml
+# (Intentionally removed — images are now built locally)
 
 # ---------------------------------------------------------
 # 8. SAVE IMAGES
