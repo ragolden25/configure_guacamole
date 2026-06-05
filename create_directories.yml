@@ -22,6 +22,8 @@
   loop:
     - "{{ guacamole_build }}/{{ quarter }}"
     - "{{ guacd_build }}/{{ quarter }}"
+    - "{{ nginx_build }}/{{ quarter }}"
+    - "{{ postgres_build }}/{{ quarter }}"
   delegate_to: localhost
 
 # 3. Seed delivery directory from previous quarter (only if it exists)
@@ -45,6 +47,8 @@
   loop:
     - "{{ guacamole_build }}"
     - "{{ guacd_build }}"
+    - "{{ nginx_build }}"
+    - "{{ postgres_build }}"
   when:
     - previous_quarter is defined
     - quarter != previous_quarter
@@ -72,4 +76,6 @@
   loop:
     - guacamole
     - guacd
+    - nginx
+    - postgres
   delegate_to: localhost
