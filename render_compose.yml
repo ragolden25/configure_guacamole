@@ -1,7 +1,7 @@
 ---
 - name: Render docker-compose.yml
   template:
-    src: "{{ guac_files }}/{{ quarter }}/docker-compose.yml.j2"
+    src: "{{ guac_files }}/docker-compose.yml.j2"
     dest: "{{ guac_files }}/{{ quarter }}/docker-compose.yml"
     owner: ansible
     group: ansible-admin
@@ -10,7 +10,7 @@
 
 - name: Render .env
   template:
-    src: "{{ guac_files }}/{{ quarter }}/env.quarter.j2"
+    src: "{{ guac_files }}/env.quarter.j2"
     dest: "{{ guac_files }}/{{ quarter }}/.env"
     owner: ansible
     group: ansible-admin
