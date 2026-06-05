@@ -1,0 +1,97 @@
+---
+# detect_versions.yml
+# Detects versions for the entire Guacamole stack and writes:
+#   - versions.env (stack-wide)
+#   - VERSION files (per-component)
+
+###############################################
+# GUACAMOLE VERSION DETECTION
+###############################################
+
+- name: Detect latest Guacamole client version
+  command: "{{ guacamole_build }}/scripts/detect_guacamole_version.sh"
+  register: guac_detect
+  delegate_to: localhost
+  run_once: true
+
+- name: Set guacamole_version fact
+  set_fact:
+    guacamole_version: "{{ guac_detect.stdout | trim }}"
+  run_once: true
+
+###############################################
+# GUACD VERSION DETECTION
+###############################################
+
+- name: Detect latest guacd server version
+  command: "{{ guacd_build }}/scripts/detect_guacd_version.sh"
+  register: guacd_detect
+  delegate_to: localhost
+  run_once: true
+
+- name: Set guacd_version fact
+  set_fact:
+    guacd_version: "{{ guacd_detect.stdout | trim }}"
+  run_once: true
+
+###############################################
+# NGINX VERSION DETECTION
+###############################################
+
+- name: Detect latest nginx version
+  command: "/opt/ansible/files/avocado/scripts/detect_nginx_version.sh"
+  register: nginx_detect
+  delegate_to: localhost
+  run_once: true
+
+- name: Set nginx_version fact
+  set_fact:
+    nginx_version: "{{ nginx_detect.stdout | trim }}"
+  run_once: true
+
+###############################################
+# POSTGRES VERSION PREDICTION
+###############################################
+
+- name: Detect current postgres version
+  command: /opt/ansible/files/avocado/scripts/predict_postgres.py
+  register: pg_detect
+  delegate_to: localhost
+  run_once: true
+
+- set_fact:
+    postgres_version: "{{ pg_detect.stdout }}"
+  run_once: true
+
+###############################################
+# WRITE versions.env (STACK-WIDE)
+###############################################
+
+- name: Write versions.env for Guacamole stack
+  copy:
+    dest: "{{ guac_files }}/{{ quarter }}/versions.env"
+    content: |
+      GUACAMOLE_VERSION={{ guacamole_version }}
+      GUACD_VERSION={{ guacd_version }}
+      NGINX_VERSION={{ nginx_version }}
+      POSTGRES_VERSION={{ postgres_version }}
+  delegate_to: localhost
+  run_once: true
+
+###############################################
+# WRITE VERSION FILES (PER-COMPONENT)
+###############################################
+
+- name: Write Guacamole VERSION file
+  copy:
+    dest: "{{ guacamole_build }}/{{ quarter }}/VERSION"
+    content: "{{ guacamole_version }}"
+  delegate_to: localhost
+  run_once: true
+
+- name: Write guacd VERSION file
+  copy:
+    dest: "{{ guacd_build }}/{{ quarter }}/VERSION"
+    content: "{{ guacd_version }}"
+  delegate_to: localhost
+  run_once: true
