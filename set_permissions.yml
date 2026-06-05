@@ -1,5 +1,6 @@
 ---
-- name: Set directory permissions
+# 1. Ensure directory ownership + directory permissions (2770)
+- name: Set directory ownership and permissions
   file:
     path: "{{ guac_files }}/{{ quarter }}"
     state: directory
@@ -10,7 +11,8 @@
   delegate_to: localhost
   become: true
 
-- name: Find files
+# 2. Find all files under the quarter directory
+- name: Find all files
   find:
     paths: "{{ guac_files }}/{{ quarter }}"
     file_type: file
@@ -18,6 +20,7 @@
   delegate_to: localhost
   become: true
 
+# 3. Apply file permissions (0660)
 - name: Apply file permissions
   file:
     path: "{{ item.path }}"
