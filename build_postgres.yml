@@ -1,0 +1,12 @@
+---
+# Build Postgres functional + hardened images
+
+- name: Build Postgres functional image
+  script: build_postgres_functional.sh "{{ postgres_version }}" "{{ quarter }}"
+  args:
+    chdir: "{{ build_root }}/postgres/{{ quarter }}"
+
+- name: Build Postgres hardened image
+  script: build_postgres_hardened.sh "{{ postgres_version }}" "{{ quarter }}"
+  args:
+    chdir: "{{ build_root }}/postgres/{{ quarter }}"
