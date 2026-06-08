@@ -70,19 +70,31 @@
     chdir: "{{ tomcat_build }}/{{ quarter }}"
 
 # =====================================================================
-# 2B. Save nginx + postgres images (using component scripts)
+# 2B. Save nginx + postgres images (functional + hardened)
 # =====================================================================
 
-- name: Save nginx image
+- name: Save NGINX functional image
   command:
     cmd: >
-      {{ build_root }}/nginx/scripts/save_nginx_image.sh
+      {{ build_root }}/nginx/scripts/save_nginx_functional_image.sh
       {{ nginx_version }} {{ quarter }}
 
-- name: Save postgres image
+- name: Save NGINX hardened image
   command:
     cmd: >
-      {{ build_root }}/postgres/scripts/save_postgres_image.sh
+      {{ build_root }}/nginx/scripts/save_nginx_hardened_image.sh
+      {{ nginx_version }} {{ quarter }}
+
+- name: Save Postgres functional image
+  command:
+    cmd: >
+      {{ build_root }}/postgres/scripts/save_postgres_functional_image.sh
+      {{ postgres_version }} {{ quarter }}
+
+- name: Save Postgres hardened image
+  command:
+    cmd: >
+      {{ build_root }}/postgres/scripts/save_postgres_hardened_image.sh
       {{ postgres_version }} {{ quarter }}
 
 # =====================================================================
