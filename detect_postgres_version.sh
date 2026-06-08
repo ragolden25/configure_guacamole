@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Detect latest postgres version from Docker Hub
 REPO="docker.io/library/postgres"
 
 TAGS_JSON=$(skopeo list-tags docker://$REPO)
@@ -16,4 +17,14 @@ if [[ ${#SEMVER[@]} -eq 0 ]]; then
     exit 5
 fi
 
-echo "${SEMVER[-1]}"
+VERSION="${SEMVER[-1]}"
+
+# Write VERSION file
+QUARTER="$(cat /opt/ansible/files/common/current_quarter)"
+BUILD_DIR="/opt/ansible/files/build/postgres/${QUARTER}"
+
+mkdir -p "$BUILD_DIR"
+echo "$VERSION" > "$BUILD_DIR/VERSION"
+
+# Output version for Ansible
+echo "$VERSION"
