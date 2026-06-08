@@ -50,18 +50,19 @@
   run_once: true
 
 ###############################################
-# POSTGRES VERSION DETECTION
+# POSTGRES VERSION DETECTION (MODERNIZED)
 ###############################################
 
-- name: Detect current postgres version
-  command: "{{ build_root }}/postgres/scripts/predict_postgres.py"
-  register: pg_detect
+- name: Read postgres VERSION file
+  slurp:
+    src: "{{ build_root }}/postgres/{{ quarter }}/VERSION"
+  register: postgres_version_raw
   delegate_to: localhost
   run_once: true
 
 - name: Set postgres_version fact
   set_fact:
-    postgres_version: "{{ pg_detect.stdout | trim }}"
+    postgres_version: "{{ postgres_version_raw.content | b64decode | trim }}"
   run_once: true
 
 ###############################################
