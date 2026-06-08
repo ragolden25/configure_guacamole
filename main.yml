@@ -1,6 +1,6 @@
 ---
 # build_guac_release main tasks
-# Full quarterly/weekly pipeline
+# Full quarterly pipeline
 
 # ---------------------------------------------------------
 # 1. DETERMINE QUARTER AUTOMATICALLY
@@ -84,10 +84,9 @@
   when: is_new_quarter
 
 # ---------------------------------------------------------
-# 6. BUILD FUNCTIONAL + HARDENED COMPONENTS
+# 6. BUILD FUNCTIONAL + HARDENED TOMCAT + FUNCTIONAL GUACAMOLE
 # ---------------------------------------------------------
 
-# Tomcat + Guacamole
 - name: Build functional Tomcat
   include_tasks: build_tomcat_functional.yml
 
@@ -100,29 +99,13 @@
 - name: Build hardened Tomcat
   include_tasks: build_tomcat_hardened.yml
 
-# Guacd
+# 6B. Build functional Guacd
 - name: Build functional Guacd
   include_tasks: build_guacd.yml
 
-# NGINX
-- name: Build functional NGINX
-  script: "{{ build_root }}/nginx/{{ quarter }}/scripts/build_nginx_functional.sh"
-
-- name: Build hardened NGINX
-  script: "{{ build_root }}/nginx/{{ quarter }}/scripts/build_nginx_hardened.sh"
-
-# POSTGRES
-- name: Build functional Postgres
-  script: "{{ build_root }}/postgres/{{ quarter }}/scripts/build_postgres_functional.sh"
-
-- name: Build hardened Postgres
-  script: "{{ build_root }}/postgres/{{ quarter }}/scripts/build_postgres_hardened.sh"
-
 # ---------------------------------------------------------
-# 7. REMOVE HYBRID PULL IMAGES (REPLACED BY BUILD + LOAD)
+# 7. PULL IMAGES - Deprecated because we build images now
 # ---------------------------------------------------------
-
-# (Intentionally removed — images are now built locally)
 
 # ---------------------------------------------------------
 # 8. SAVE IMAGES
