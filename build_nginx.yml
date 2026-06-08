@@ -1,0 +1,12 @@
+---
+# Build NGINX functional + hardened images
+
+- name: Build NGINX functional image
+  script: build_nginx_functional.sh "{{ nginx_version }}" "{{ quarter }}"
+  args:
+    chdir: "{{ build_root }}/nginx/{{ quarter }}"
+
+- name: Build NGINX hardened image
+  script: build_nginx_hardened.sh "{{ nginx_version }}" "{{ quarter }}"
+  args:
+    chdir: "{{ build_root }}/nginx/{{ quarter }}"
