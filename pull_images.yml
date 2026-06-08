@@ -1,10 +1,3 @@
-build_guacd.yml
----
-- name: Build guacd image
-  command: "{{ guacd_build }}/scripts/build_guacd.sh {{ guacd_version }} {{ quarter }}"
-  args:
-    chdir: "{{ guacd_build }}"
-[root@ansible tasks]# cat pull_images.yml
 ---
 # pull_images.yml
 
