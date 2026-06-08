@@ -1,0 +1,4 @@
+- name: Build functional Guacamole image
+  command: "{{ guac_build_root }}/scripts/build_guacamole_functional.sh"
+  args:
+    chdir: "{{ guac_build_root }}"
