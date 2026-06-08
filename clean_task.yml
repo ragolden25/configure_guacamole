@@ -1,0 +1,41 @@
+---
+- name: Ensure quarterly directory exists
+  file:
+    path: "{{ guac_files }}/{{ quarter }}"
+    state: directory
+    mode: "2770"
+  delegate_to: localhost
+
+- name: Remove metadata files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ guac_files }}/{{ quarter }}/metadata.json"
+    - "{{ guac_files }}/{{ quarter }}/build_info.json"
+
+- name: Remove rendered compose/env files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ guac_files }}/{{ quarter }}/docker-compose.yml"
+    - "{{ guac_files }}/{{ quarter }}/.env"
+
+- name: Remove versions.env
+  file:
+    path: "{{ guac_files }}/{{ quarter }}/versions.env"
+    state: absent
+
+- name: Find old tarballs
+  find:
+    paths: "{{ guac_files }}/{{ quarter }}"
+    patterns: "*.tar.gz"
+    recurse: yes
+  register: old_tarballs
+
+- name: Delete old tarballs
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ old_tarballs.files }}"
