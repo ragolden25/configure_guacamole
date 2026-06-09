@@ -12,8 +12,10 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
       ca-certificates \
       wget \
+      bison \
       build-essential \
       clang \
+      flex \
       llvm-dev \
       libcurl4-openssl-dev \
       libgss-dev \
