@@ -18,7 +18,9 @@ RUN set -eux; \
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
+      bison \
       ca-certificates \
+      flex \
       libcurl4t64 \
       libgssapi-krb5-2 \
       libicu76 \
