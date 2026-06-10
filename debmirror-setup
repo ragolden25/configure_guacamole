@@ -1,0 +1,72 @@
+WORKING debmirror command for RHEL10 (EPEL version)
+Code
+debmirror \
+  -a amd64 \
+  -d trixie,trixie-updates,trixie-security \
+  -s main \
+  -h deb.debian.org \
+  -r debian \
+  --method=http \
+  --progress \
+  /var/www/html/repos/debian13
+This WILL run.
+This is the correct syntax for the RHEL/EPEL version.
+
+Let me break down each option:
+
+Option	Meaning
+-a amd64	architecture
+-d trixie,trixie-updates,trixie-security	distributions
+-s main	section
+-h deb.debian.org	host
+-r debian	root path
+--method=http	protocol
+--progress	show progress
+/var/www/html/repos/debian13	required final argument (mirror directory)
+
+
+If you leave off the final directory, debmirror complains that every option “requires an argument.”
+
+✔ If you want a config file, you CAN still use one
+…but you must source it yourself and pass the values manually.
+
+Example:
+
+/etc/debmirror/debian13.conf
+Code
+ARCH=amd64
+DIST="trixie,trixie-updates,trixie-security"
+SECTION=main
+HOST=deb.debian.org
+ROOT=debian
+METHOD=http
+MIRROR=/var/www/html/repos/debian13
+Wrapper script /usr/local/bin/sync-debian13.sh
+Code
+#!/bin/bash
+source /etc/debmirror/debian13.conf
+
+debmirror \
+  -a "$ARCH" \
+  -d "$DIST" \
+  -s "$SECTION" \
+  -h "$HOST" \
+  -r "$ROOT" \
+  --method="$METHOD" \
+  --progress \
+  "$MIRROR"
+Make executable:
+
+Code
+chmod +x /usr/local/bin/sync-debian13.sh
+Run:
+
+Code
+/usr/local/bin/sync-debian13.sh
+This avoids the “requires an argument” errors because:
+
+every option has a value
+
+the mirror directory is passed last
+
+no unsupported long options are used
