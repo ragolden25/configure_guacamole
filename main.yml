@@ -1,156 +1,444 @@
+main.yml
 ---
-# build_guac_release main tasks
-# Full quarterly pipeline
+# tasks file for configure_guacamole
 
-# ---------------------------------------------------------
-# 1. DETERMINE QUARTER AUTOMATICALLY
-# ---------------------------------------------------------
+# ───────────────────────────────────────────────
+# FULL DOCKER CLEANUP (containers, images, volumes, networks)
+# ───────────────────────────────────────────────
 
-- name: Determine quarter automatically
-  command: /opt/ansible/files/common/scripts/determine_quarters.sh
+- name: Stop all containers
+  ansible.builtin.shell: |
+    docker ps -aq | xargs -r docker stop
+  when: dev_clean
   args:
-    chdir: /opt/ansible/files/common
-  register: quarter_info
-  delegate_to: localhost
+    executable: /bin/bash
+
+- name: Remove all containers
+  ansible.builtin.shell: |
+    docker ps -aq | xargs -r docker rm -f
+  when: dev_clean
+  args:
+    executable: /bin/bash
+
+- name: Remove all Docker images
+  ansible.builtin.shell: |
+    docker images -q | xargs -r docker rmi -f
+  when: dev_clean
+  args:
+    executable: /bin/bash
+
+- name: Remove all Docker volumes
+  ansible.builtin.shell: |
+    docker volume ls -q | xargs -r docker volume rm
+  when: dev_clean
+  args:
+    executable: /bin/bash
+
+- name: Remove all Docker networks (except default ones)
+  ansible.builtin.shell: |
+    for net in $(docker network ls --format '{{'{{'}}.Name{{'}}'}}'); do
+      case "$net" in
+        bridge|host|none) ;;
+        *) docker network rm "$net" || true ;;
+      esac
+    done
+  when: dev_clean
+  args:
+    executable: /bin/bash
+
+- name: Remove /var/lib/containers directory
+  ansible.builtin.file:
+    path: /var/lib/containers
+    state: absent
+  when: dev_clean
+
+# ───────────────────────────────────────────────
+# Directory Setup
+# ───────────────────────────────────────────────
+
+- name: Ensure compose directory exists
+  ansible.builtin.file:
+    path: /var/lib/containers/compose
+    state: directory
+    mode: '0755'
+
+- name: Ensure Guacamole config directory exists
+  ansible.builtin.file:
+    path: /var/lib/containers/guacamole
+    state: directory
+    owner: 1001
+    group: 1001
+    mode: '0755'
+
+- name: Ensure images directory exists
+  ansible.builtin.file:
+    path: /var/lib/containers/images
+    state: directory
+    mode: '0755'
+
+- name: Ensure nginx conf.d directory exists
+  ansible.builtin.file:
+    path: /var/lib/containers/nginx/conf.d
+    state: directory
+    mode: '0755'
+
+- name: Ensure nginx certs directory exists
+  ansible.builtin.file:
+    path: /var/lib/containers/nginx/certs
+    state: directory
+    mode: '0755'
+
+- name: Ensure DB dump directory exists
+  ansible.builtin.file:
+    path: /var/lib/containers/guacdb
+    state: directory
+    mode: '0755'
+
+# GUACDB COPY
+- name: copy guac_export_ptek.sql
+  ansible.builtin.copy:
+    src: /opt/ansible/files/avocado/{{ quarter }}/guacamole/guac_export_ptek.sql
+    dest: /var/lib/containers/guacdb/guac_import.sql
+    mode: '0644'
+
+# ───────────────────────────────────────────────
+# Compose Setup
+# ───────────────────────────────────────────────
+
+- name: Copy docker-compose.yml
+  ansible.builtin.copy:
+    src: "/opt/ansible/files/avocado/{{ quarter }}/docker-compose.yml"
+    dest: /var/lib/containers/compose/docker-compose.yml
+    mode: '0644'
+
+- name: Create run.sh
+  ansible.builtin.copy:
+    dest: /var/lib/containers/compose/run.sh
+    content: |
+      #!/bin/bash
+      docker compose -f /var/lib/containers/compose/docker-compose.yml up -d
+    mode: '0700'
+
+- name: Create stop.sh
+  ansible.builtin.copy:
+    dest: /var/lib/containers/compose/stop.sh
+    content: |
+      #!/bin/bash
+      docker compose -f /var/lib/containers/compose/docker-compose.yml down
+    mode: '0700'
+
+# ───────────────────────────────────────────────
+# Export Scripts
+# ───────────────────────────────────────────────
+
+- name: Create db-export-default.sh
+  ansible.builtin.copy:
+    dest: /var/lib/containers/compose/db-export-default.sh
+    mode: '0700'
+    content: |
+      #!/bin/bash
+      EXPORT_FILE="guac_export_default.sql"
+
+      docker exec guac-db pg_dump -U guacuser guacamole_db > "$EXPORT_FILE"
+
+      docker exec guac-db psql -U guacuser -d guacamole_db -tAc \
+      "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;" \
+      > schema_signature.txt
+
+      {
+        echo "-- SCHEMA_SIGNATURE_START"
+        sed 's/^/-- /' schema_signature.txt
+        echo "-- SCHEMA_SIGNATURE_END"
+      } >> "$EXPORT_FILE"
+
+      echo "Export complete: $EXPORT_FILE"
+      echo "Copy this file to /opt/ansible/files/avocado/guacdb/"
+
+- name: Create db-export-ptek.sh
+  ansible.builtin.copy:
+    dest: /var/lib/containers/compose/db-export-ptek.sh
+    mode: '0700'
+    content: |
+      #!/bin/bash
+      EXPORT_FILE="guac_export_ptek.sql"
+
+      docker exec guac-db pg_dump -U guacuser guacamole_db > "$EXPORT_FILE"
+
+      docker exec guac-db psql -U guacuser -d guacamole_db -tAc \
+      "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;" \
+      > schema_signature.txt
+
+      {
+        echo "-- SCHEMA_SIGNATURE_START"
+        sed 's/^/-- /' schema_signature.txt
+        echo "-- SCHEMA_SIGNATURE_END"
+      } >> "$EXPORT_FILE"
+
+      echo "Export complete: $EXPORT_FILE"
+      echo "Copy this file to /opt/ansible/files/avocado/guacdb/"
+
+# ───────────────────────────────────────────────
+# Import Scripts
+# ───────────────────────────────────────────────
+
+- name: Create db-import-default.sh
+  ansible.builtin.copy:
+    dest: /var/lib/containers/compose/db-import-default.sh
+    mode: '0700'
+    content: |
+      #!/bin/bash
+      set -e
+      IMPORT_FILE="/var/lib/containers/guacdb/guac_export_default.sql"
+      if [[ ! -f "$IMPORT_FILE" ]]; then
+          echo "ERROR: $IMPORT_FILE not found"
+          exit 1
+      fi
+      echo "Importing Guacamole DB (default profile)..."
+      docker exec -i guac-db psql -U guacuser -d guacamole_db < "$IMPORT_FILE"
+      echo "Default profile import complete."
+
+# ───────────────────────────────────────────────
+# Image Copy (controller → target)
+# ───────────────────────────────────────────────
+
+- name: Ensure image destination directory exists
+  ansible.builtin.file:
+    path: "/var/lib/containers/images"
+    state: directory
+    mode: '0755'
+
+- name: Copy ALL container images
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/var/lib/containers/images/"
+    mode: '0644'
+  with_fileglob:
+    - "/opt/ansible/files/avocado/{{ quarter }}/images/*.tar.gz"
+  register: copied_images
+
+- name: Fail if no images were copied
+  ansible.builtin.fail:
+    msg: "No container images found in /opt/ansible/files/avocado/{{ quarter }}/images/"
+  when: copied_images.results | length == 0
+
+# ───────────────────────────────────────────────
+# Image Load (target host)
+# ───────────────────────────────────────────────
+
+- name: Find container images on target
+  ansible.builtin.find:
+    paths: "/var/lib/containers/images"
+    patterns: "*.tar.gz"
+  register: found_images
+
+- name: Fail if no images found on target
+  ansible.builtin.fail:
+    msg: "No images found in /var/lib/containers/images on target host."
+  when: found_images.files | length == 0
+
+- name: Load ALL container images
+  ansible.builtin.shell: |
+    docker load -i "{{ item.path }}"
+  args:
+    executable: /bin/bash
+  loop: "{{ found_images.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+# ───────────────────────────────────────────────
+# Firewall Configuration
+# ───────────────────────────────────────────────
+
+- name: Ensure firewalld is installed
+  ansible.builtin.package:
+    name: firewalld
+    state: present
+
+- name: Ensure firewalld is running
+  ansible.builtin.service:
+    name: firewalld
+    state: started
+    enabled: true
+
+- name: Allow HTTP/HTTPS in public zone
+  ansible.builtin.firewalld:
+    service: "{{ item }}"
+    zone: public
+    permanent: true
+    state: enabled
+  loop:
+    - http
+    - https
+  notify: reload firewalld
+
+- name: Add Guacamole ports to internal zone
+  ansible.builtin.firewalld:
+    port: "{{ item }}"
+    zone: internal
+    permanent: true
+    state: enabled
+  loop:
+    - "4822/tcp"
+    - "5432/tcp"
+  notify: reload firewalld
+
+# ───────────────────────────────────────────────
+# Guacamole
+# ───────────────────────────────────────────────
+
+- name: Copy guacamole.properties
+  copy:
+    src: /opt/ansible/files/avocado/{{ quarter }}/guacamole/guacamole.properties
+    dest: /var/lib/containers/guacamole/guacamole.properties
+    owner: root
+    group: root
+    mode: '0640'
+
+# ───────────────────────────────────────────────
+# nginx config (standalone only)
+# ───────────────────────────────────────────────
+
+- name: Generate DH params file
+  command: openssl dhparam -out /var/lib/containers/nginx/ssl-dhparams.pem 2048
+  args:
+    creates: /var/lib/containers/nginx/ssl-dhparams.pem
+  when: compose_template == "docker-compose.yml.j2"
+
+- name: Copy nginx.conf
+  ansible.builtin.copy:
+    src: "/opt/ansible/files/avocado/{{ quarter }}/nginx/nginx.conf"
+    dest: "/var/lib/containers/nginx/nginx.conf"
+    mode: '0644'
+    owner: '101'
+    group: '101'
+  when: compose_template == "docker-compose.yml.j2"
+
+- name: Copy mime.types
+  ansible.builtin.copy:
+    src: "/opt/ansible/files/avocado/{{ quarter }}/nginx/mime.types"
+    dest: "/var/lib/containers/nginx/mime.types"
+    mode: '0644'
+    owner: '101'
+    group: '101'
+  when: compose_template == "docker-compose.yml.j2"
+
+- name: Copy server certs
+  ansible.builtin.copy:
+    src: "/opt/ansible/files/avocado/{{ quarter }}/nginx/certs/{{ item }}"
+    dest: "/var/lib/containers/nginx/certs/{{ item }}"
+    mode: '0644'
+    owner: '101'
+    group: '101'
+  loop:
+    - fullchain.pem
+    - privkey.pem
+  when: compose_template == "docker-compose.yml.j2"
+
+# ───────────────────────────────────────────────
+# guacamole.conf must ALWAYS be copied
+# ───────────────────────────────────────────────
+
+- name: Copy guacamole.conf vhost
+  ansible.builtin.copy:
+    src: "/opt/ansible/files/avocado/{{ quarter }}/nginx/conf.d/guacamole.conf"
+    dest: "/var/lib/containers/nginx/conf.d/guacamole.conf"
+    mode: '0644'
+    owner: '101'
+    group: '101'
+
+# ───────────────────────────────────────────────
+# Stack Control
+# ───────────────────────────────────────────────
+
+- name: Stop existing stack
+  ansible.builtin.shell: /var/lib/containers/compose/stop.sh
+  ignore_errors: true
+
+# ───────────────────────────────────────────────
+# Start Postgres only
+# ───────────────────────────────────────────────
+
+- name: Start only Postgres container
+  ansible.builtin.shell: |
+    docker compose -f /var/lib/containers/compose/docker-compose.yml up -d postgres
+  changed_when: true
+
+- name: Wait for Postgres to be ready
+  ansible.builtin.command: docker exec guac-db pg_isready -U {{ guac_db_user }} -d postgres
+  register: pg_ready
+  retries: 60
+  delay: 2
+  until: pg_ready.rc == 0
+
+# ───────────────────────────────────────────────
+# Ensure DB exists
+# ───────────────────────────────────────────────
+
+- name: Ensure Guacamole database exists
+  ansible.builtin.shell: |
+    docker exec guac-db psql -U {{ guac_db_user }} -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='{{ guac_db_name }}'" | grep -q 1 \
+    || docker exec guac-db psql -U {{ guac_db_user }} -d postgres -c "CREATE DATABASE {{ guac_db_name }} OWNER {{ guac_db_user }};"
   changed_when: false
-  run_once: true
 
-- name: Set raw quarter facts
-  set_fact:
-    quarter: "{{ quarter_info.stdout_lines[0].split('=')[1] }}"
-    previous_quarter: "{{ quarter_info.stdout_lines[1].split('=')[1] }}"
-  run_once: true
+# ───────────────────────────────────────────────
+# SQL Import
+# ───────────────────────────────────────────────
 
-# ---------------------------------------------------------
-# 1A. NORMALIZE + VALIDATE QUARTER VARIABLES
-# ---------------------------------------------------------
+- name: Check for copied SQL dump file
+  ansible.builtin.stat:
+    path: "{{ guac_import_dest }}"
+  register: guac_import_stat
 
-- name: Normalize quarter variables
-  set_fact:
-    quarter: "{{ quarter | trim }}"
-    previous_quarter: "{{ previous_quarter | trim }}"
-  run_once: true
+- name: Abort if copied SQL dump file is missing
+  ansible.builtin.fail:
+    msg: "guac_import.sql not found after copy. Import cannot continue."
+  when: not guac_import_stat.stat.exists
 
-- name: Fail if quarter and previous_quarter are identical
-  fail:
-    msg: >
-      determine_quarters.sh returned identical values for quarter and previous_quarter:
-      {{ quarter }}. Aborting to prevent recursive nesting.
-  when: quarter == previous_quarter
-  run_once: true
+- name: Import Guacamole database dump
+  ansible.builtin.shell: |
+    docker exec -i guac-db psql -U {{ guac_db_user }} -d {{ guac_db_name }} < {{ guac_import_dest }}
+  args:
+    executable: /bin/bash
+  register: import_result
+  failed_when: import_result.rc != 0
 
-- name: Set is_new_quarter fact
-  set_fact:
-    is_new_quarter: "{{ quarter != previous_quarter }}"
-  run_once: true
+# ───────────────────────────────────────────────
+# Optional: Extract schema signature
+# ───────────────────────────────────────────────
 
-# ---------------------------------------------------------
-# 2. CREATE DIRECTORIES + SEED FROM PREVIOUS QUARTER
-# ---------------------------------------------------------
-
-- name: Create and seed quarterly directories
-  include_tasks: create_directories.yml
-
-- name: Update "current" symlink to point to new quarter
-  file:
-    src: "{{ guac_files }}/{{ quarter }}"
-    dest: "{{ guac_files }}/current"
-    state: link
-    force: true
-  run_once: true
-
-# ---------------------------------------------------------
-# 3. CLEAN NEW QUARTER DIRECTORY
-# ---------------------------------------------------------
-
-- name: Clean new quarter directory
-  include_tasks: clean_task.yml
-  when: is_new_quarter
-
-# ---------------------------------------------------------
-# 4. DETECT COMPONENT VERSIONS
-# ---------------------------------------------------------
-
-- name: Detect component versions
-  include_tasks: detect_versions.yml
-  when: is_new_quarter
-
-# ---------------------------------------------------------
-# 5. GENERATE METADATA FILES
-# ---------------------------------------------------------
-
-- name: Generate metadata files
-  include_tasks: generate_metadata.yml
-  when: is_new_quarter
-
-# ---------------------------------------------------------
-# 6. BUILD FUNCTIONAL + HARDENED TOMCAT + FUNCTIONAL GUACAMOLE
-# ---------------------------------------------------------
-
-- name: Build functional Tomcat
-  include_tasks: build_tomcat_functional.yml
-
-- name: Extract functional Tomcat
-  include_tasks: extract_tomcat_functional.yml
-
-- name: Build functional Guacamole
-  include_tasks: build_guacamole_functional.yml
-
-- name: Build hardened Tomcat
-  include_tasks: build_tomcat_hardened.yml
-
-# 6B. Build functional Guacd
-- name: Build functional Guacd
-  include_tasks: build_guacd.yml
-
-# ---------------------------------------------------------
-# 7. PULL IMAGES - Deprecated because we build images now
-# ---------------------------------------------------------
-
-# ---------------------------------------------------------
-# 8. SAVE IMAGES
-# ---------------------------------------------------------
-
-- name: Save built images
-  include_tasks: save_images.yml
-
-# ---------------------------------------------------------
-# 9. RENDER DOCKER COMPOSE + ENV FILES
-# ---------------------------------------------------------
-
-- name: Read GUACAMOLE_VERSION from versions.env
-  shell: "grep '^GUACAMOLE_VERSION=' {{ guac_files }}/{{ quarter }}/versions.env | cut -d'=' -f2"
-  register: guacamole_version_cmd
+- name: Extract schema signature from SQL dump
+  ansible.builtin.shell: |
+    grep -A 999 "-- SCHEMA_SIGNATURE_START" {{ guac_import_dest }} \
+    | grep -B 999 "-- SCHEMA_SIGNATURE_END" \
+    | sed 's/^-- //'
+  register: schema_signature
   changed_when: false
 
-- name: Read GUACD_VERSION from versions.env
-  shell: "grep '^GUACD_VERSION=' {{ guac_files }}/{{ quarter }}/versions.env | cut -d'=' -f2"
-  register: guacd_version_cmd
-  changed_when: false
+- name: Display schema signature
+  ansible.builtin.debug:
+    msg: "{{ schema_signature.stdout_lines }}"
 
-- name: Read NGINX_VERSION from versions.env
-  shell: "grep '^NGINX_VERSION=' {{ guac_files }}/{{ quarter }}/versions.env | cut -d'=' -f2"
-  register: nginx_version_cmd
-  changed_when: false
+# ───────────────────────────────────────────────
+# Apply CIS benchmarks to containers
+# ───────────────────────────────────────────────
+- name: Deploy Docker CIS remediation script
+  ansible.builtin.copy:
+    src: /opt/ansible/scripts/docker_cis_remediate-guac.sh
+    dest: /root/bin/docker_cis_remediate.sh
+    owner: root
+    group: root
+    mode: '0700'
 
-- name: Read POSTGRES_VERSION from versions.env
-  shell: "grep '^POSTGRES_VERSION=' {{ guac_files }}/{{ quarter }}/versions.env | cut -d'=' -f2"
-  register: postgres_version_cmd
-  changed_when: false
+- name: Run Docker CIS remediation
+  ansible.builtin.command: /root/bin/docker_cis_remediate.sh
+  register: cis_remediate
+  changed_when: "'Remediation complete' in cis_remediate.stdout"
 
-- name: Promote version vars into facts
-  set_fact:
-    GUACAMOLE_VERSION: "{{ guacamole_version_cmd.stdout }}"
-    GUACD_VERSION: "{{ guacd_version_cmd.stdout }}"
-    NGINX_VERSION: "{{ nginx_version_cmd.stdout }}"
-    POSTGRES_VERSION: "{{ postgres_version_cmd.stdout }}"
+# ───────────────────────────────────────────────
+# Start full stack
+# ───────────────────────────────────────────────
 
-- name: Render docker-compose.yml and .env
-  include_tasks: render_compose.yml
-
-# ---------------------------------------------------------
-# 10. FINAL PERMISSIONS NORMALIZATION
-# ---------------------------------------------------------
-
-- name: Normalize permissions
-  include_tasks: set_permissions.yml
+- name: Start full Guacamole stack
+  ansible.builtin.shell: /var/lib/containers/compose/run.sh
+  register: guac_stack
+  failed_when: guac_stack.rc not in [0,1]
