@@ -480,11 +480,6 @@ main.yml
 # ───────────────────────────────────────────────
 # Start full stack
 # ───────────────────────────────────────────────
-
-# ───────────────────────────────────────────────
-# Start full stack
-# ───────────────────────────────────────────────
-
 - name: Start full Guacamole stack
   ansible.builtin.shell: /var/lib/containers/compose/run.sh
   register: guac_stack
